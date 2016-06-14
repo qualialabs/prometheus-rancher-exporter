@@ -100,11 +100,7 @@ function createServer(cattle_config_url, listen_port, update_interval, monitor_s
             debug.log('got host metric results %o', hostdata)
             hostdata.map( function(item) {
                 var hostName = (item.name != null) ? getSafeName(item.name) : getSafeName(item.hostname)
-                if (monitor_state == 'healthState') {                  
-                  var value = (item.healthState == 'healthy') ? 1 : 0
-                } else {
-                  var value = (item.state == 'active') ? 1 : 0
-                }
+                var value = (item.state == 'active') ? 1 : 0
                 updateGauge(hosts_gauge, { name: hostName }, value)
             });
 
@@ -171,7 +167,6 @@ function getEnvironmentsState(cattle_config_url, monitor_state, callback) {
                     return {
                         name: raw.name,
                         state: raw.state,
-                        healthState: raw.healthState,
                         hostname: raw.hostname,
                         labels: raw.labels
                     }

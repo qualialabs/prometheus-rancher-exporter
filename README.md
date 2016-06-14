@@ -11,6 +11,8 @@ The application, expects to get the following environment variables from the hos
 * CATTLE_SECRET_KEY
 * CATTLE_CONFIG_URL
 
+By setting environment variable MONITOR_STATE to `state` or `healthState`, it can also choose to monitor state or healthState metrics in Rancher.
+
 ## Install and deploy
 
 Run manually from Docker Hub:

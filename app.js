@@ -13,7 +13,7 @@ process.on('SIGINT', function() {
 });
 
 var opts = getOptions()
-createServer(opts.cattle_config_url, opts.listen_port, opts.update_interval)
+createServer(opts.cattle_config_url, opts.listen_port, opts.update_interval, opts.monitor_state)
 
 function getOptions() {
     var opts = {
@@ -24,7 +24,8 @@ function getOptions() {
         // optional
         cattle_config_url:  process.env.CATTLE_CONFIG_URL || 'http://localhost:8080/v1',
         listen_port:        process.env.LISTEN_PORT || 9010,
-        update_interval:    process.env.UPDATE_INTERVAL || 5000
+        update_interval:    process.env.UPDATE_INTERVAL || 5000,
+        monitor_state:      process.env.MONITOR_STATE || 'state'
     }
 
     var requiredOpts = [
@@ -41,25 +42,25 @@ function getOptions() {
     return opts
 }
 
-function createServer(cattle_config_url, listen_port, update_interval) {
+function createServer(cattle_config_url, listen_port, update_interval, monitor_state) {
     var client = new promclient()
 
     var environment_gauge = client.newGauge({
         namespace: 'rancher',
         name: 'environment',
-        help: 'Value of 1 if all containers in a stack are active'
+        help: 'Value of 1 if all containers in a stack are active or healthy'
     })
 
     var services_gauge = client.newGauge({
         namespace: 'rancher',
         name: 'services',
-        help: 'Value of 1 if individual services in a stack are active'
+        help: 'Value of 1 if individual services in a stack are active or healthy'
     })
 
     var hosts_gauge = client.newGauge({
         namespace: 'rancher',
         name: 'hosts',
-        help: 'Value of 1 if individual hosts are active'
+        help: 'Value of 1 if individual hosts are active or healthy'
     })
 
     function updateGauge(gauge_name, params, value) {
@@ -68,32 +69,42 @@ function createServer(cattle_config_url, listen_port, update_interval) {
 
     function updateMetrics() {
         debug.log('requesting metrics')
-        getEnvironmentsState(cattle_config_url, function(err, results, servicedata, hostdata) {
+        getEnvironmentsState(cattle_config_url, monitor_state, function(err, results, servicedata, hostdata) {
             if (err) {
                 debug.log('failed to get environment state: %s', err.toString())
                 throw err
             }
             debug.log('got stack metric results %o', results)
             Object.keys(results).forEach(function(name) {
-                var state = results[name]
+                var stateOrHealthState = results[name]
                 var envName = getSafeName(name)
-                var value = (state == 'active') ? 1 : 0
+                if (monitor_state == 'healthState') {                  
+                  var value = (stateOrHealthState == 'healthy') ? 1 : 0
+                } else {
+                  var value = (stateOrHealthState == 'active') ? 1 : 0
+                }
                 updateGauge(environment_gauge, { name: envName }, value)
             });
             debug.log('got service metric results %o', servicedata)
             servicedata.map( function(item) {
-                var state = item.state
                 var serviceName = getSafeName(item.name)
                 var envName = getSafeName(item.environment)
                 var envServname = envName + "/" + serviceName
-                var value = (state == 'active') ? 1 : 0
+                if (monitor_state == 'healthState') {                  
+                  var value = (item.healthState == 'healthy') ? 1 : 0
+                } else {
+                  var value = (item.state == 'active') ? 1 : 0
+                }
                 updateGauge(services_gauge, { name: envServname }, value)
             });
             debug.log('got host metric results %o', hostdata)
             hostdata.map( function(item) {
-                var state = item.state
                 var hostName = (item.name != null) ? getSafeName(item.name) : getSafeName(item.hostname)
-                var value = (state == 'active') ? 1 : 0
+                if (monitor_state == 'healthState') {                  
+                  var value = (item.healthState == 'healthy') ? 1 : 0
+                } else {
+                  var value = (item.state == 'active') ? 1 : 0
+                }
                 updateGauge(hosts_gauge, { name: hostName }, value)
             });
 
@@ -111,7 +122,7 @@ function getSafeName(name) {
     return name.replace(/[^a-zA-Z0-9_:]/g, '_')
 }
 
-function getEnvironmentsState(cattle_config_url, callback) {
+function getEnvironmentsState(cattle_config_url, monitor_state, callback) {
     var envIdMap = {}
     var hostIdMap = {}
 
@@ -160,6 +171,7 @@ function getEnvironmentsState(cattle_config_url, callback) {
                     return {
                         name: raw.name,
                         state: raw.state,
+                        healthState: raw.healthState,
                         hostname: raw.hostname,
                         labels: raw.labels
                     }
@@ -188,6 +200,7 @@ function getEnvironmentsState(cattle_config_url, callback) {
                     return {
                         name: service.name,
                         state: service.state,
+                        healthState: service.healthState,
                         environment: envIdMap[service.environmentId]
                     }
                 });
@@ -209,7 +222,9 @@ function getEnvironmentsState(cattle_config_url, callback) {
             var envState = {}
             serviceData.forEach(function(service) {
                 if (!envState[service.environment]) {
-                    envState[service.environment] = service.state
+                    envState[service.environment] = (monitor_state == 'healthState') ? service.healthState: service.state
+                } else if (monitor_state == 'healthState' && service.healthState != 'healthy') {
+                    envState[service.environment] = service.healthState
                 } else if (service.state != 'active') {
                     envState[service.environment] = service.state
                 }

@@ -63,6 +63,12 @@ function createServer(cattle_config_url, listen_port, update_interval, monitor_s
         help: 'Value of 1 if individual hosts are active or healthy'
     })
 
+    var hosts_info_gauge = client.newGauge({
+        namespace: 'rancher',
+        name: 'hostsDiskUsage',
+        help: 'Percetage of disk usage of the host'
+    })
+
     function updateGauge(gauge_name, params, value) {
         gauge_name.set(params, value)
     }
@@ -102,6 +108,8 @@ function createServer(cattle_config_url, listen_port, update_interval, monitor_s
                 var hostName = (item.name != null) ? getSafeName(item.name) : getSafeName(item.hostname)
                 var value = (item.state == 'active') ? 1 : 0
                 updateGauge(hosts_gauge, { name: hostName }, value)
+                var diskUsage = item.diskUsage
+                updateGauge(hosts_info_gauge, { name: hostName }, diskUsage)
             });
 
         });
@@ -168,6 +176,7 @@ function getEnvironmentsState(cattle_config_url, monitor_state, callback) {
                         name: raw.name,
                         state: raw.state,
                         hostname: raw.hostname,
+                        diskUsage: raw.info.diskInfo.mountPoints[ Object.keys(raw.info.diskInfo.mountPoints)[0]].percentUsed,
                         labels: raw.labels
                     }
                 });

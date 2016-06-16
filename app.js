@@ -63,10 +63,22 @@ function createServer(cattle_config_url, listen_port, update_interval, monitor_s
         help: 'Value of 1 if individual hosts are active or healthy'
     })
 
-    var hosts_info_gauge = client.newGauge({
+    var hosts_disk_usage_gauge = client.newGauge({
         namespace: 'rancher',
-        name: 'hostsDiskUsage',
+        name: 'hosts_disk_usage',
         help: 'Percetage of disk usage of the host'
+    })
+
+    var hosts_memory_usage_gauge = client.newGauge({
+        namespace: 'rancher',
+        name: 'hosts_memory_usage',
+        help: 'Percetage of memory usage of the host'
+    })
+
+    var hosts_cpu_avg_usage_gauge = client.newGauge({
+        namespace: 'rancher',
+        name: 'hosts_cpu_avg_usage',
+        help: 'Percetage of cpu usage of the host'
     })
 
     function updateGauge(gauge_name, params, value) {
@@ -109,7 +121,12 @@ function createServer(cattle_config_url, listen_port, update_interval, monitor_s
                 var value = (item.state == 'active') ? 1 : 0
                 updateGauge(hosts_gauge, { name: hostName }, value)
                 var diskUsage = item.diskUsage
-                updateGauge(hosts_info_gauge, { name: hostName }, diskUsage)
+                updateGauge(hosts_disk_usage_gauge, { name: hostName }, diskUsage)
+                var memoryUsage = item.memoryUsage
+                updateGauge(hosts_memory_usage_gauge, { name: hostName }, memoryUsage)
+                var cpuAvgUsage = item.cpuAvgUsage
+                updateGauge(hosts_cpu_avg_usage_gauge, { name: hostName }, cpuAvgUsage)
+
             });
 
         });
@@ -177,6 +194,8 @@ function getEnvironmentsState(cattle_config_url, monitor_state, callback) {
                         state: raw.state,
                         hostname: raw.hostname,
                         diskUsage: raw.info.diskInfo.mountPoints[ Object.keys(raw.info.diskInfo.mountPoints)[0]].percentUsed,
+                        memoryUsage: (raw.info.memoryInfo.memTotal - raw.info.memoryInfo.memFree)*100/raw.info.memoryInfo.memTotal,
+                        cpuAvgUsage: raw.info.cpuInfo.cpuCoresPercentages.reduce(function(pv, cv) { return pv + cv; }, 0)/raw.info.cpuInfo.count,
                         labels: raw.labels
                     }
                 });

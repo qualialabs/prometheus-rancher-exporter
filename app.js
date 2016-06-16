@@ -72,13 +72,25 @@ function createServer(cattle_config_url, listen_port, update_interval, monitor_s
     var hosts_memory_usage_gauge = client.newGauge({
         namespace: 'rancher',
         name: 'hosts_memory_usage',
-        help: 'Percetage of memory usage of the host'
+        help: 'Percetage of total memory usage of the host'
+    })
+
+    var hosts_active_memory_usage_gauge = client.newGauge({
+        namespace: 'rancher',
+        name: 'hosts_active_memory_usage',
+        help: 'Percetage of active memory usage of the host'
     })
 
     var hosts_cpu_avg_usage_gauge = client.newGauge({
         namespace: 'rancher',
         name: 'hosts_cpu_avg_usage',
         help: 'Percetage of cpu usage of the host'
+    })
+
+    var hosts_cpu_cores_usage_highest_gauge = client.newGauge({
+        namespace: 'rancher',
+        name: 'hosts_cpu_cores_usage_highest',
+        help: 'Highest percetage of cpu cores usage of the host'
     })
 
     function updateGauge(gauge_name, params, value) {
@@ -124,9 +136,12 @@ function createServer(cattle_config_url, listen_port, update_interval, monitor_s
                 updateGauge(hosts_disk_usage_gauge, { name: hostName }, diskUsage)
                 var memoryUsage = item.memoryUsage
                 updateGauge(hosts_memory_usage_gauge, { name: hostName }, memoryUsage)
+                var activeMemoryUsage = item.activeMemoryUsage
+                updateGauge(hosts_active_memory_usage_gauge, { name: hostName }, activeMemoryUsage)
                 var cpuAvgUsage = item.cpuAvgUsage
                 updateGauge(hosts_cpu_avg_usage_gauge, { name: hostName }, cpuAvgUsage)
-
+                var cpuMaxUsage = item.cpuMaxUsage
+                updateGauge(hosts_cpu_cores_usage_highest_gauge, { name: hostName }, cpuMaxUsage)
             });
 
         });
@@ -195,7 +210,9 @@ function getEnvironmentsState(cattle_config_url, monitor_state, callback) {
                         hostname: raw.hostname,
                         diskUsage: raw.info.diskInfo.mountPoints[ Object.keys(raw.info.diskInfo.mountPoints)[0]].percentUsed,
                         memoryUsage: (raw.info.memoryInfo.memTotal - raw.info.memoryInfo.memFree)*100/raw.info.memoryInfo.memTotal,
+                        activeMemoryUsage: raw.info.memoryInfo.active *100/raw.info.memoryInfo.memTotal,
                         cpuAvgUsage: raw.info.cpuInfo.cpuCoresPercentages.reduce(function(pv, cv) { return pv + cv; }, 0)/raw.info.cpuInfo.count,
+                        cpuMaxUsage: Math.max.apply(null, raw.info.cpuInfo.cpuCoresPercentages),
                         labels: raw.labels
                     }
                 });

@@ -155,7 +155,7 @@ function createServer(cattle_config_url, listen_port, update_interval, monitor_s
 }
 
 function getSafeName(name) {
-    return name.replace(/[^a-zA-Z0-9_:]/g, '_')
+    return (typeof name != 'undefined' ) ? name.replace(/[^a-zA-Z0-9_:]/g, '_') : 'undefined'
 }
 
 function getEnvironmentsState(cattle_config_url, monitor_state, callback) {
@@ -208,7 +208,7 @@ function getEnvironmentsState(cattle_config_url, monitor_state, callback) {
                         name: raw.name,
                         state: raw.state,
                         hostname: raw.hostname,
-                        diskUsage: raw.info.diskInfo.mountPoints[ Object.keys(raw.info.diskInfo.mountPoints)[0]].percentUsed,
+                        diskUsage: raw.info.diskInfo.mountPoints[ Object.keys(raw.info.diskInfo.mountPoints)[0]].percentage,
                         memoryUsage: (raw.info.memoryInfo.memTotal - raw.info.memoryInfo.memFree)*100/raw.info.memoryInfo.memTotal,
                         activeMemoryUsage: raw.info.memoryInfo.active *100/raw.info.memoryInfo.memTotal,
                         cpuAvgUsage: raw.info.cpuInfo.cpuCoresPercentages.reduce(function(pv, cv) { return pv + cv; }, 0)/raw.info.cpuInfo.count,
